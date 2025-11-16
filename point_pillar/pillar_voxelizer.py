@@ -53,6 +53,7 @@ class PillarVoxelizer:
             (z >= self.z_min) & (z < self.z_max)
         )
         points = points[in_range]
+        x, y, z = x[in_range], y[in_range], z[in_range]
         N = points.size(0)
         
         # discretize
