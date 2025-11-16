@@ -1,4 +1,4 @@
-# /src/data/modelnet_dataset.py
+# /point_pillar/modelnet_dataset.py
 # Author: Yonghao Li (Paul)
 # Utils to read ModelNet data
 
@@ -72,36 +72,6 @@ def normalize_point_cloud(points: np.ndarray) -> np.ndarray:
 
   return points.astype(np.float32)
   
-
-def visualize_point_cloud(points, title=None, elev=20, azim=45):
-  """
-  Visualize a point cloud tensor or numpy as a 3D scatter plot
-  """
-  # change tensor back to array
-  if isinstance(points, torch.Tensor):
-    points = points.detach().cpu().numpy()
-
-  fig = plt.figure(figsize=(8, 8))
-  ax = fig.add_subplot(111, projection='3d')
-  xs, ys, zs = points[:, 0], points[:, 1], points[:, 2]
-  c = xs + ys + zs
-  ax.scatter(xs, ys, zs, c=c, cmap='viridis', s=10)  
-  ax.view_init(elev=elev, azim=azim)
-  ax.set_xlabel('X')
-  ax.set_ylabel('Y')
-  ax.set_zlabel('Z')
-  if title is not None:
-      ax.set_title(title)
-
-  max_range = (xs.max() - xs.min(),
-                ys.max() - ys.min(),
-                zs.max() - zs.min())
-  max_range = max(max_range)
-  for axis, data in zip([ax.set_xlim, ax.set_ylim, ax.set_zlim],
-                        [(xs, ys, zs)[0], (xs, ys, zs)[1], (xs, ys, zs)[2]]):
-      mid = (data.max() + data.min()) / 2.0
-      axis(mid - max_range / 2, mid + max_range / 2)
-  plt.show()
 
 
 class ModelNetDataset(Dataset):

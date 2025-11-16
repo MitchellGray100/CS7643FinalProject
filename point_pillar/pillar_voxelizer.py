@@ -140,56 +140,6 @@ class PillarVoxelizer:
 
         return pillar_features, pillar_coords, pillar_mask
 
-def visualize_pillar_occupancy(f, c, m, nx, ny):
-    """
-    create a heat map from a single instance of object.
-    f: (P, N, D)        features
-    c: (P, 2)           coords
-    m: (p,)             mask
-    nx, ny: size of the map
-    """
-    P, N, D = f.shape
-    occ = torch.zeros((ny, nx))
-    active_coords = c[m.bool()]
-    for ix, iy in active_coords:
-        occ[iy, ix] = 1.0
-
-    plt.figure(figsize=(4, 4))
-    plt.imshow(occ.cpu().numpy(), origin="lower")
-    plt.title("Pillar occupancy (BEV)")
-    plt.xlabel("x index")
-    plt.ylabel("y index")
-    plt.colorbar(label="occupied")
-    plt.show()
-
-def visualize_pillar_strength(f, c, m, nx, ny):
-    """
-    create a heat map from a single instance of object.
-    f: (P, N, D)        features
-    c: (P, 2)           coords
-    m: (p,)             mask
-    nx, ny: size of the map
-    """
-    pillar_feat_norm = f.norm(dim=-1)           # (P, N)
-    pillar_feat_norm_max, _ = pillar_feat_norm.max(dim=-1)  # (P,)
-
-    P, N, D = f.shape
-    heat = torch.zeros((ny, nx))
-
-    for p_idx in range(P):
-        if m[p_idx] == 0:
-                continue
-        ix, iy = c[p_idx]
-        heat[iy, ix] = pillar_feat_norm_max[p_idx]
-
-    plt.figure(figsize=(4, 4))
-    plt.imshow(heat.cpu().numpy(), origin="lower")
-    plt.title("Pillar feature strength (max norm)")
-    plt.xlabel("x index")
-    plt.ylabel("y index")
-    plt.colorbar(label="max ||feature||")
-    plt.show()
-
 
 
 
