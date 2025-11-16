@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class TNet(nn.Module):
     def __init__(self, initial_dim=3):
-        super(TNet, self).__init__()
+        nn.Module.__init__(self)
         self.initial_dim = initial_dim
 
         self.convolution_layer_1 = nn.Conv1d(initial_dim, 64, 1)
