@@ -1,0 +1,162 @@
+# /src/data/modelnet_dataset.py
+# Author: Yonghao Li (Paul)
+# Utils to read ModelNet data
+
+# Reference:
+# https://segeval.cs.princeton.edu/public/off_format.html
+# https://trimesh.org/
+
+
+import os
+import glob
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+import trimesh
+
+from torch.utils.data import Dataset
+
+# only to verify the files
+def read_off(path):
+  """
+  Read .off file and return a raw vertices np array (float32) and a faces np array (int16)
+  """
+  with open(path, 'r') as f:
+    # First row is always "OFF"
+    header = f.readline().strip()
+    assert header == 'OFF'
+
+    # Second row is 
+    # numVertices numFaces numEdges
+    counts = f.readline().strip().split()
+    n_verts = int(counts[0])
+    n_faces = int(counts[1])
+
+    # next are verts
+    verts = []
+    for _ in range(n_verts):
+      line = f.readline()
+      if not line:
+        break
+      x, y, z = map(float, line.strip().split()[:3])
+      verts.append([x, y, z])
+
+    # the rest are faces.
+    faces = []
+    for _ in range(n_faces):
+      line = f.readline()
+      if not line:
+        break
+      n, a, b, c = map(int, line.strip().split()[:4])
+      faces.append([n, a, b, c])
+
+  return np.asarray(verts, dtype=np.float32), np.asarray(faces, dtype=np.int16)
+
+def sample_off_surface(path, n_points: int=2048):
+  """
+  using trimesh to read an OFF file and sample the surfaces. return np array float32
+  """
+  mesh = trimesh.load(path, process=True)
+  points, _ = trimesh.sample.sample_surface(mesh, n_points)
+
+  return points.astype(np.float32)
+
+def normalize_point_cloud(points: np.ndarray) -> np.ndarray:
+  """
+  center and scale the point cloud
+  """
+  centroid = np.mean(points, axis=0)
+  points = points - centroid
+  max_dist = np.max(np.linalg.norm(points, axis=1))
+  points = points / max_dist
+
+  return points.astype(np.float32)
+  
+
+def visualize_point_cloud(points, title=None, elev=20, azim=45):
+  """
+  Visualize a point cloud tensor or numpy as a 3D scatter plot
+  """
+  # change tensor back to array
+  if isinstance(points, torch.Tensor):
+    points = points.detach().cpu().numpy()
+
+  fig = plt.figure(figsize=(8, 8))
+  ax = fig.add_subplot(111, projection='3d')
+  xs, ys, zs = points[:, 0], points[:, 1], points[:, 2]
+  c = xs + ys + zs
+  ax.scatter(xs, ys, zs, c=c, cmap='viridis', s=10)  
+  ax.view_init(elev=elev, azim=azim)
+  ax.set_xlabel('X')
+  ax.set_ylabel('Y')
+  ax.set_zlabel('Z')
+  if title is not None:
+      ax.set_title(title)
+
+  max_range = (xs.max() - xs.min(),
+                ys.max() - ys.min(),
+                zs.max() - zs.min())
+  max_range = max(max_range)
+  for axis, data in zip([ax.set_xlim, ax.set_ylim, ax.set_zlim],
+                        [(xs, ys, zs)[0], (xs, ys, zs)[1], (xs, ys, zs)[2]]):
+      mid = (data.max() + data.min()) / 2.0
+      axis(mid - max_range / 2, mid + max_range / 2)
+  plt.show()
+
+
+class ModelNetDataset(Dataset):
+  """
+  pytorch dataset for ModelNet10 and ModelNet40.
+
+  expected folder structure:
+  root/
+    class1/
+        train/
+            *.off
+        test/
+            *.off
+    class2/
+    ...
+
+  To use Dataset class:
+    from torch.utils.data import DataLoader
+    train_dataset = ModelNetDataset(root, 'train')
+    train_loader = DataLoader(train_dataset, batch_size)
+  """
+  def __init__(self, root:str, split:str='train', num_points:int=2048, normalize:bool=True, ):
+    super().__init__()
+    self.root = root
+    self.num_points = num_points
+    self.normalize = normalize
+    self.split = split
+
+    class_dirs = sorted(
+              d for d in os.listdir(self.root)
+              if os.path.isdir(os.path.join(self.root, d))
+          )
+    self.class_names = class_dirs
+    self.class_to_idx = {cls: i for i, cls in enumerate(self.class_names)}
+
+    self.samples = []
+    for cls in self.class_names:
+      split_dir = os.path.join(self.root, cls, self.split)
+      off_files = glob.glob(os.path.join(split_dir, "*.off"))
+      for fpath in off_files:
+        self.samples.append((fpath, self.class_to_idx[cls]))
+
+    # this won't validate the data
+    print(f"Found {len(self.class_names)} classes, {len(self.samples)} samples")
+
+  def __len__(self) -> int:
+    return len(self.samples)
+  
+  def __getitem__(self, index):
+    path, label_idx = self.samples[index]
+    points = sample_off_surface(path=path, n_points=self.num_points)
+    if self.normalize:
+      points = normalize_point_cloud(points=points)
+    
+    points = torch.from_numpy(points)
+    label = torch.tensor(label_idx)
+
+    return points, label
