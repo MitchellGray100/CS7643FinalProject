@@ -1,11 +1,13 @@
 from torch_geometric.datasets import ModelNet
 from torch_geometric.loader import DataLoader
+from torch_geometric.transforms import SamplePoints
 
 file_path = '../../data/'
+number_of_points = 1024
 
 # ModelNet10
-train_10 = ModelNet(root=file_path+"ModelNet10/", name='10', train=True)
-test_10 = ModelNet(root=file_path+"ModelNet10/", name='10', train=False)
+train_10 = ModelNet(root=file_path+"ModelNet10/", name='10', train=True, pre_transform=SamplePoints(number_of_points), force_reload=True)
+test_10 = ModelNet(root=file_path+"ModelNet10/", name='10', train=False, pre_transform=SamplePoints(number_of_points), force_reload=True)
 
 print(f"ModelNet10: {train_10.num_classes}")
 print(f"train n samples: {len(train_10)}")
@@ -21,8 +23,8 @@ print(batch.y)
 print(batch.batch)
 
 # ModelNet40
-train_40 = ModelNet(root=file_path+"ModelNet40/", name='40', train=True)
-test_40 = ModelNet(root=file_path+"ModelNet40/", name='40', train=False)
+train_40 = ModelNet(root=file_path+"ModelNet40/", name='40', train=True, pre_transform=SamplePoints(number_of_points), force_reload=True)
+test_40 = ModelNet(root=file_path+"ModelNet40/", name='40', train=False, pre_transform=SamplePoints(number_of_points), force_reload=True)
 
 print(f"ModelNet40: {train_40.num_classes}")
 print(f"train n samples: {len(train_40)}")
