@@ -6,8 +6,8 @@ class PointNet(nn.Module):
     def __init__(self):
         nn.Module.__init__(self)
 
-        self.input_TNet = TNet(initial_dim=3)
-        self.feature_TNet = TNet(initial_dim=64)
+        self.input_TNet = TNet(transform_dimension=3)
+        self.feature_TNet = TNet(transform_dimension=64)
 
         self.convolution_layer_1 = nn.Conv1d(3, 64, 1)
         self.convolution_layer_2 = nn.Conv1d(64, 128, 1)
@@ -27,7 +27,8 @@ class PointNet(nn.Module):
         transform_matrix_input = self.input_TNet(x)
         x = torch.bmm(transform_matrix_input, x).contiguous()
 
-        # mlp 3 to 64
+        # mlp
+        # 3 to 64
         x = self.convolution_layer_1(x)
         x = self.batch_norm_1(x)
         x = self.relu(x)
@@ -36,12 +37,12 @@ class PointNet(nn.Module):
         transform_matrix_feature = self.feature_TNet(x)
         x = torch.bmm(transform_matrix_feature, x).contiguous()
 
-        # mlp 64 to 128
+        # 64 to 128
         x = self.convolution_layer_2(x)
         x = self.batch_norm_2(x)
         x = self.relu(x)
 
-        # mlp 128 to 1024
+        # 128 to 1024
         x = self.convolution_layer_3(x)
         x = self.batch_norm_3(x)
         x = self.relu(x)

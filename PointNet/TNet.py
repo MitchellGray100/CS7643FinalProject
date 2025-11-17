@@ -2,17 +2,17 @@ import torch
 import torch.nn as nn
 
 class TNet(nn.Module):
-    def __init__(self, initial_dim=3):
+    def __init__(self, transform_dimension=3):
         nn.Module.__init__(self)
-        self.initial_dim = initial_dim
+        self.transform_dimension = transform_dimension
 
-        self.convolution_layer_1 = nn.Conv1d(initial_dim, 64, 1)
+        self.convolution_layer_1 = nn.Conv1d(transform_dimension, 64, 1)
         self.convolution_layer_2 = nn.Conv1d(64, 128, 1)
         self.convolution_layer_3 = nn.Conv1d(128, 1024, 1)
 
         self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, initial_dim**2)
+        self.fc3 = nn.Linear(256, transform_dimension ** 2)
         
         self.batch_norm_1 = nn.BatchNorm1d(64)
         self.batch_norm_2 = nn.BatchNorm1d(128)
@@ -57,9 +57,9 @@ class TNet(nn.Module):
         learned_matrix = self.fc3(learned_matrix)
         
         # identity matrix to add to learned matrix (initial_dim, initial_dim)
-        identity_matrix = torch.eye(self.initial_dim, device=learned_matrix.device)
-        identity_matrix = identity_matrix.reshape(1, self.initial_dim * self.initial_dim)
+        identity_matrix = torch.eye(self.transform_dimension, device=learned_matrix.device)
+        identity_matrix = identity_matrix.reshape(1, self.transform_dimension * self.transform_dimension)
         learned_matrix = learned_matrix + identity_matrix
-        learned_matrix = learned_matrix.reshape(batch_size, self.initial_dim, self.initial_dim)
+        learned_matrix = learned_matrix.reshape(batch_size, self.transform_dimension, self.transform_dimension)
         
         return learned_matrix
