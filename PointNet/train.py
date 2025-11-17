@@ -1,5 +1,5 @@
 import torch
-from torch.nn.functional import dropout
+import torch.nn as nn
 from tqdm import tqdm
 import torch.nn.functional as F
 
@@ -69,7 +69,6 @@ def one_epoch(model, loader, optimizer, device, regularization_loss_weight=0.001
 
     return average_loss, average_accuracy
 
-
 def evaluate(model, loader, device):
     model.eval()
     correct_pred_num = 0
@@ -88,6 +87,10 @@ def evaluate(model, loader, device):
     accuracy = (correct_pred_num / total_samples_num) * 100
     return accuracy
 
+def set_batch_norm_momentum(model, new_momentum):
+    for module in model.modules():
+        if isinstance(module, nn.BatchNorm1d):
+            module.momentum = new_momentum
 
 def train():
     model_path = None
@@ -154,9 +157,17 @@ def train():
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=learning_rate_step_size, gamma=learning_rate_decay_factor)
 
     # training loop
+    batch_norm_momentum_decay_start = 0.5
+    batch_norm_momentum_decay_end = 0.99
     best_test_accuracy = 0
     for epoch in range(1, num_epochs + 1):
         print(f'\nEpoch {epoch}/{num_epochs}')
+
+        # change batch norm momentum
+        percent_epoch = (epoch - 1) / (num_epochs - 1)
+        decay = batch_norm_momentum_decay_start + ((batch_norm_momentum_decay_end-batch_norm_momentum_decay_start)*percent_epoch)
+        new_momentum = 1 - decay
+        set_batch_norm_momentum(model, new_momentum)
 
         # train
         train_loss, train_acc = one_epoch(model, train_loader, optimizer, device, regularization_weight)
