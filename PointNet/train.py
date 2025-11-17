@@ -14,6 +14,77 @@ from torch_geometric.transforms import Compose
 
 import os
 
+import matplotlib.pyplot as plt
+
+def plot_curves(train_losses, train_accuracies, test_accuracies, config_name, out_dir="plots"):
+    os.makedirs(out_dir, exist_ok=True)
+    epochs = list(range(1, len(train_losses) + 1))
+
+    # loss
+    plt.figure()
+    plt.plot(epochs, train_losses, label="train loss")
+    plt.xlabel("epoch")
+    plt.ylabel("loss")
+    plt.title(f"train loss vs epoch ({config_name})")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, f"loss_{config_name}.png"))
+    plt.close()
+
+    # accuracy
+    plt.figure()
+    plt.plot(epochs, train_accuracies, label="train accuracy")
+    plt.plot(epochs, test_accuracies, label="test accuracy")
+    plt.xlabel("epoch")
+    plt.ylabel("accuracy percent")
+    plt.title(f"accuracy vs epoch ({config_name})")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, f"accuracy_{config_name}.png"))
+    plt.close()
+
+def log_result(config_name, model_name, batch_size, num_epochs, learning_rate, learning_rate_step_size, learning_rate_decay_factor, min_learning_rate, regularization_weight, dropout_prob, adam_weight_decay, augment_training_data, num_points, best_test_accuracy, path="results.csv"):
+    header = (
+        "config_name,"
+        "model_name,"
+        "batch_size,"
+        "num_epochs,"
+        "learning_rate,"
+        "learning_rate_step_size,"
+        "learning_rate_decay_factor,"
+        "min_learning_rate,"
+        "regularization_weight,"
+        "dropout_prob,"
+        "adam_weight_decay,"
+        "augment_training_data,"
+        "num_points,"
+        "best_test_accuracy\n"
+    )
+
+    file_exists = os.path.exists(path)
+    with open(path, "a") as f:
+        if not file_exists:
+            f.write(header)
+
+        f.write(
+            f"{config_name},"
+            f"{model_name},"
+            f"{batch_size},"
+            f"{num_epochs},"
+            f"{learning_rate},"
+            f"{learning_rate_step_size},"
+            f"{learning_rate_decay_factor},"
+            f"{min_learning_rate},"
+            f"{regularization_weight},"
+            f"{dropout_prob},"
+            f"{adam_weight_decay},"
+            f"{int(augment_training_data)},"
+            f"{num_points},"
+            f"{best_test_accuracy}\n"
+        )
+
 def get_batch(batch, device):
 
     batch_size = batch.y.size(0)
@@ -96,11 +167,11 @@ def train():
     model_path = None
     number_of_classes = 0
 
-    # params!
     file_path = '../../data/'
+    # params!
     model_name = "ModelNet10"  # ModelNet10 or ModelNet40
     batch_size = 32
-    num_epochs = 50
+    num_epochs = 200
     learning_rate = 0.001
     learning_rate_step_size = 20
     learning_rate_decay_factor = 0.5
@@ -109,6 +180,13 @@ def train():
     dropout_prob = 0.3
     adam_weight_decay = 1e-4
     augment_training_data = True
+    num_points = 1024 # sample points from models
+
+    config_name = (
+        f"{model_name}_bs{batch_size}_lr{learning_rate}"
+        f"_reg{regularization_weight}_drop{dropout_prob}"
+        f"_aug{int(augment_training_data)}_pts{num_points}"
+    )
 
     if model_name == "ModelNet10":
         model_path = file_path+"ModelNet10/"
@@ -126,7 +204,6 @@ def train():
 
     processed_dir = os.path.join(model_path, 'processed')
     need_reload = False
-    num_points = 1024
     if os.path.exists(processed_dir):
         try:
             temp_dataset = ModelNet(root=model_path, name=model_name, train=True)
@@ -150,7 +227,7 @@ def train():
 
     print(f"number of classes {train_dataset.num_classes}")
     print(f"train n samples: {len(train_dataset)}")
-    print(f"test n samples: {len(train_dataset)}")
+    print(f"test n samples: {len(test_dataset)}")
 
 
     # PointNetClassification
@@ -165,6 +242,9 @@ def train():
     batch_norm_momentum_decay_start = 0.5
     batch_norm_momentum_decay_end = 0.99
     best_test_accuracy = 0
+    train_losses = []
+    train_accuracies = []
+    test_accuracies = []
     for epoch in range(1, num_epochs + 1):
         print(f'\nEpoch {epoch}/{num_epochs}')
 
@@ -175,7 +255,7 @@ def train():
         set_batch_norm_momentum(model, new_momentum)
 
         # train
-        train_loss, train_acc = one_epoch(model, train_loader, optimizer, device, regularization_weight)
+        train_loss, train_accuracy = one_epoch(model, train_loader, optimizer, device, regularization_weight)
 
         # evaluate
         test_accuracy = evaluate(model, test_loader, device)
@@ -188,7 +268,12 @@ def train():
             param_group['lr'] = max(param_group['lr'], min_learning_rate)
         current_lr = optimizer.param_groups[0]['lr']
 
-        print(f"learning rate: {current_lr:.6f}, train loss: {train_loss}, train accuracy: {train_acc}%, test accuracy: {test_accuracy}%")
+        print(f"learning rate: {current_lr:.6f}, train loss: {train_loss}, train accuracy: {train_accuracy}%, test accuracy: {test_accuracy}%")
+
+        # save for plot
+        train_losses.append(train_loss)
+        train_accuracies.append(train_accuracy)
+        test_accuracies.append(test_accuracy)
 
         # save best model
         if test_accuracy > best_test_accuracy:
@@ -197,6 +282,8 @@ def train():
             print(f"save model test accuracy: {best_test_accuracy:}%)")
 
     print(f"best test accuracy {best_test_accuracy}%")
+    plot_curves(train_losses, train_accuracies, test_accuracies, config_name)
+    log_result(config_name=config_name, model_name=model_name, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate, learning_rate_step_size=learning_rate_step_size, learning_rate_decay_factor=learning_rate_decay_factor, min_learning_rate=min_learning_rate, regularization_weight=regularization_weight, dropout_prob=dropout_prob, adam_weight_decay=adam_weight_decay, augment_training_data=augment_training_data, num_points=num_points, best_test_accuracy=best_test_accuracy)
 
 if __name__ == '__main__':
     train()
