@@ -22,16 +22,17 @@ try:
 except ImportError:
     is_colab = False
 
-def plot_curves(train_losses, train_accuracies, test_accuracies, config_name, out_dir="plots"):
+def plot_curves(train_losses, test_losses, train_accuracies, test_accuracies, config_name, out_dir="plots"):
     os.makedirs(out_dir, exist_ok=True)
     epochs = list(range(1, len(train_losses) + 1))
 
     # loss
     plt.figure()
     plt.plot(epochs, train_losses, label="train loss")
+    plt.plot(epochs, test_losses, label="test loss")
     plt.xlabel("epoch")
     plt.ylabel("loss")
-    plt.title(f"train loss vs epoch ({config_name})")
+    plt.title(f"loss vs epoch\n({config_name})")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
@@ -44,7 +45,7 @@ def plot_curves(train_losses, train_accuracies, test_accuracies, config_name, ou
     plt.plot(epochs, test_accuracies, label="test accuracy")
     plt.xlabel("epoch")
     plt.ylabel("accuracy percent")
-    plt.title(f"accuracy vs epoch ({config_name})")
+    plt.title(f"accuracy vs epoch\n({config_name})")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
@@ -160,21 +161,41 @@ def evaluate(model, loader, device):
     model.eval()
     correct_pred_num = 0
     total_samples_num = 0
+    total_loss = 0.0
 
     with torch.no_grad():
         for batch in tqdm(loader, desc='Evaluating'):
             points, labels = get_batch(batch, device)
 
             logits, transform_matrix_feature = model(points)
-            pred = logits.argmax(dim=1)
 
+            loss = F.cross_entropy(logits, labels)
+            total_loss += loss.item()
+
+            pred = logits.argmax(dim=1)
             correct_pred_num += count_correct(pred, labels)
             total_samples_num += labels.size(0)
 
+    avg_loss = total_loss / len(loader)
     accuracy = (correct_pred_num / total_samples_num) * 100
-    return accuracy
 
-def train():
+    return avg_loss, accuracy
+
+def train(
+    model_name = "ModelNet10",  # ModelNet10 or ModelNet40
+    batch_size = 32,
+    num_epochs = 200, # 250
+    learning_rate = 0.001, # 0.01, 0.001
+    learning_rate_step_size = 20,
+    learning_rate_decay_factor = 0.7,
+    min_learning_rate = 0,
+    regularization_weight = 0.001,
+    dropout_prob = 0.3,
+    adam_weight_decay = 0 ,# 0, 1e-4
+    augment_training_data = True,
+    num_points = 1024 # sample points from models
+):
+
     model_path = None
     number_of_classes = 0
 
@@ -182,23 +203,29 @@ def train():
     default_colab_root = "/content/data/"
     file_path = os.environ.get("MODELNET_ROOT", default_colab_root if is_colab else default_local_root)
 
-    # params!
-    model_name = "ModelNet10"  # ModelNet10 or ModelNet40
-    batch_size = 32
-    num_epochs = 5 # 250
-    learning_rate = 0.001 # 0.01, 0.001
-    learning_rate_step_size = 20
-    learning_rate_decay_factor = 0.7
-    min_learning_rate = 0
-    regularization_weight = 0.001
-    dropout_prob = 0.3
-    adam_weight_decay = 0 # 0, 1e-4
-    augment_training_data = True
-    num_points = 1024 # sample points from models
+    # # params!
+    # model_name = "ModelNet10"  # ModelNet10 or ModelNet40
+    # batch_size = 32
+    # num_epochs = 200 # 250
+    # learning_rate = 0.001 # 0.01, 0.001
+    # learning_rate_step_size = 20
+    # learning_rate_decay_factor = 0.7
+    # min_learning_rate = 0
+    # regularization_weight = 0.001
+    # dropout_prob = 0.3
+    # adam_weight_decay = 0 # 0, 1e-4
+    # augment_training_data = True
+    # num_points = 1024 # sample points from models
+
+    # reload data all the time
+    will_force_reload = False
 
     config_name = (
-        f"{model_name}_bs{batch_size}_lr{learning_rate}"
+        f"{model_name}_bs{batch_size}_ep{num_epochs}"
+        f"_lr{learning_rate}_schedS{learning_rate_step_size}"
+        f"_schedD{learning_rate_decay_factor}"
         f"_reg{regularization_weight}_drop{dropout_prob}"
+        f"_wd{adam_weight_decay}"
         f"_aug{int(augment_training_data)}_pts{num_points}"
     )
 
@@ -233,8 +260,6 @@ def train():
         SamplePoints(num_points),
         normalize_unit_sphere,
     ])
-
-    will_force_reload = False
 
     train_dataset = ModelNet(
         root=model_path,
@@ -275,6 +300,7 @@ def train():
     train_losses = []
     train_accuracies = []
     test_accuracies = []
+    test_losses = []
     for epoch in range(1, num_epochs + 1):
         print(f'\nEpoch {epoch}/{num_epochs}')
 
@@ -282,7 +308,8 @@ def train():
         train_loss, train_accuracy = one_epoch(model, train_loader, optimizer, device, regularization_weight)
 
         # evaluate
-        test_accuracy = evaluate(model, test_loader, device)
+        test_loss, test_accuracy = evaluate(model, test_loader, device)
+
 
         # learning rate schedule step
         scheduler.step()
@@ -292,21 +319,22 @@ def train():
             param_group['lr'] = max(param_group['lr'], min_learning_rate)
         current_lr = optimizer.param_groups[0]['lr']
 
-        print(f"learning rate: {current_lr:.6f}, train loss: {train_loss}, train accuracy: {train_accuracy}%, test accuracy: {test_accuracy}%")
+        print(f"\nlearning rate: {current_lr:.6f}, train loss: {train_loss}, test loss: {test_loss}, train accuracy: {train_accuracy}%, test accuracy: {test_accuracy}%")
 
         # save for plot
         train_losses.append(train_loss)
         train_accuracies.append(train_accuracy)
         test_accuracies.append(test_accuracy)
+        test_losses.append(test_loss)
 
-        # # save best model
-        # if test_accuracy > best_test_accuracy:
-        #     best_test_accuracy = test_accuracy
-        #     torch.save(model.state_dict(), 'model/pointnet_model.pth')
-        #     print(f"save model test accuracy: {best_test_accuracy}%)")
+        if test_accuracy > best_test_accuracy:
+            best_test_accuracy = test_accuracy
+            # # save best model
+            # torch.save(model.state_dict(), 'model/pointnet_model.pth')
+            # print(f"save model test accuracy: {best_test_accuracy}%)")
 
     print(f"best test accuracy {best_test_accuracy}%")
-    plot_curves(train_losses, train_accuracies, test_accuracies, config_name)
+    plot_curves(train_losses, test_losses, train_accuracies, test_accuracies, config_name)
     log_result(config_name=config_name, model_name=model_name, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate, learning_rate_step_size=learning_rate_step_size, learning_rate_decay_factor=learning_rate_decay_factor, min_learning_rate=min_learning_rate, regularization_weight=regularization_weight, dropout_prob=dropout_prob, adam_weight_decay=adam_weight_decay, augment_training_data=augment_training_data, num_points=num_points, best_test_accuracy=best_test_accuracy)
 
 if __name__ == '__main__':

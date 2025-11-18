@@ -10,12 +10,16 @@ class PointNet(nn.Module):
         self.feature_TNet = TNet(transform_dimension=64)
 
         self.convolution_layer_1 = nn.Conv1d(3, 64, 1)
-        self.convolution_layer_2 = nn.Conv1d(64, 128, 1)
-        self.convolution_layer_3 = nn.Conv1d(128, 1024, 1)
+        self.convolution_layer_2 = nn.Conv1d(64, 64, 1)
+        self.convolution_layer_3 = nn.Conv1d(64, 64, 1)
+        self.convolution_layer_4 = nn.Conv1d(64, 128, 1)
+        self.convolution_layer_5 = nn.Conv1d(128, 1024, 1)
 
         self.batch_norm_1 = nn.BatchNorm1d(64)
-        self.batch_norm_2 = nn.BatchNorm1d(128)
-        self.batch_norm_3 = nn.BatchNorm1d(1024)
+        self.batch_norm_2 = nn.BatchNorm1d(64)
+        self.batch_norm_3 = nn.BatchNorm1d(64)
+        self.batch_norm_4 = nn.BatchNorm1d(128)
+        self.batch_norm_5 = nn.BatchNorm1d(1024)
 
         self.relu = nn.ReLU()
         self.maxpool = nn.AdaptiveMaxPool1d(1)
@@ -33,18 +37,28 @@ class PointNet(nn.Module):
         x = self.batch_norm_1(x)
         x = self.relu(x)
 
+        # 64 to 64
+        x = self.convolution_layer_2(x)
+        x = self.batch_norm_2(x)
+        x = self.relu(x)
+
+        # 64 to 64
+        x = self.convolution_layer_3(x)
+        x = self.batch_norm_3(x)
+        x = self.relu(x)
+
         # feature transform 64 to 64 OPTIONAL?
         transform_matrix_feature = self.feature_TNet(x)
         x = torch.bmm(transform_matrix_feature, x).contiguous()
 
         # 64 to 128
-        x = self.convolution_layer_2(x)
-        x = self.batch_norm_2(x)
+        x = self.convolution_layer_4(x)
+        x = self.batch_norm_4(x)
         x = self.relu(x)
 
         # 128 to 1024
-        x = self.convolution_layer_3(x)
-        x = self.batch_norm_3(x)
+        x = self.convolution_layer_5(x)
+        x = self.batch_norm_5(x)
         x = self.relu(x)
 
         # global
