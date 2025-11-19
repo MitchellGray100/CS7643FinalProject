@@ -1,0 +1,9 @@
+model_name,batch_size,num_epochs,learning_rate,learning_rate_decay_step,learning_rate_decay_factor,min_learning_rate,regularization_loss_weight,dropout_prob,adam_weight_decay,augment_training_data,num_points,batch_norm_init_decay,batch_norm_decay_rate,batch_norm_decay_step,batch_norm_decay_clip
+ModelNet40,32,250,0.001,200000,0.7,0.0,0.001,0.3,0.0,1,1024,0.5,0.5,200000,0.99
+ModelNet40,16,250,0.001,200000,0.7,0.0,0.001,0.3,0.0,1,1024,0.5,0.5,200000,0.99
+ModelNet40,64,250,0.001,200000,0.7,0.0,0.001,0.3,0.0,1,1024,0.5,0.5,200000,0.99
+ModelNet40,32,250,0.01,200000,0.7,0.0,0.001,0.3,0.0,1,1024,0.5,0.5,200000,0.99
+ModelNet40,32,250,0.0001,200000,0.7,0.0,0.001,0.3,0.0,1,1024,0.5,0.5,200000,0.99
+ModelNet40,32,250,0.001,200000,0.7,0.0,0.001,0.0,0.0,1,1024,0.5,0.5,200000,0.99
+ModelNet40,32,250,0.001,200000,0.7,0.0,0.001,0.6,0.0,1,1024,0.5,0.5,200000,0.99
+ModelNet40,32,250,0.001,200000,0.7,0.0,0.001,0.3,0.0,0,1024,0.5,0.5,200000,0.99

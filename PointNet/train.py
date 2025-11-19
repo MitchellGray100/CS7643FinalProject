@@ -204,29 +204,72 @@ def train_one_epoch(model, loader, optimizer, device, regularization_loss_weight
 
     return average_loss, average_accuracy, step_index
 
-def evaluate_one_epoch(model, loader, device):
+def evaluate_one_epoch( model, loader, device, num_votes=1):
     model.eval()
-    correct_pred_num = 0
-    total_samples_num = 0
+
+    #  num vote == 1
+    if num_votes == 1:
+        correct_pred_num = 0
+        total_samples_num = 0
+        total_loss = 0.0
+
+        with torch.no_grad():
+            for batch in tqdm(loader, desc='Evaluating'):
+                points, labels = get_batch(batch, device)
+                logits, transform_matrix_feature = model(points)
+
+                loss = F.cross_entropy(logits, labels)
+                total_loss += loss.item()
+
+                pred = logits.argmax(dim=1)
+                correct_pred_num += count_correct(pred, labels)
+                total_samples_num += labels.size(0)
+
+        average_loss = total_loss / len(loader)
+        accuracy = (correct_pred_num/total_samples_num) * 100
+        return average_loss, accuracy
+
+    # num votes > 1
+    accumulated_logits = None
+    labels_all = None
     total_loss = 0.0
 
-    with torch.no_grad():
-        for batch in tqdm(loader, desc='Evaluating'):
-            points, labels = get_batch(batch, device)
+    for vote in range(num_votes):
+        vote_logits_list = []
+        vote_labels_list = []
 
-            logits, transform_matrix_feature = model(points)
+        with torch.no_grad():
+            for batch in tqdm(loader, desc=f"Evaluating vote {vote+1}/{num_votes}"):
+                points, labels = get_batch(batch, device)
+                logits, transform_matrix_feature = model(points)
 
-            loss = F.cross_entropy(logits, labels)
-            total_loss += loss.item()
+                loss = F.cross_entropy(logits, labels)
+                total_loss += loss.item()
+                # use cpu memory
+                vote_logits_list.append(logits.cpu())
+                vote_labels_list.append(labels.cpu())
 
-            pred = logits.argmax(dim=1)
-            correct_pred_num += count_correct(pred, labels)
-            total_samples_num += labels.size(0)
+        vote_logits = torch.cat(vote_logits_list, dim=0)
+        vote_labels = torch.cat(vote_labels_list, dim=0)
 
-    avg_loss = total_loss / len(loader)
+        if accumulated_logits is None:
+            accumulated_logits = vote_logits
+            labels_all = vote_labels
+        else:
+            accumulated_logits += vote_logits
+
+    average_loss = total_loss / (len(loader) * num_votes)
+
+    accumulated_logits /= float(num_votes)
+    pred = accumulated_logits.argmax(dim=1)
+
+    correct_pred_num = (pred == labels_all).sum().item()
+    total_samples_num = labels_all.size(0)
+
     accuracy = (correct_pred_num / total_samples_num) * 100
 
-    return avg_loss, accuracy
+    return average_loss, accuracy
+
 
 def train(
     model_name = "ModelNet40",  # ModelNet10 or ModelNet40
@@ -370,7 +413,7 @@ def train(
                                                                         base_learning_rate=learning_rate, learning_rate_decay_rate=learning_rate_decay_factor, learning_rate_decay_step=learning_rate_decay_step, learning_rate_min=min_learning_rate)
 
         # evaluate
-        test_loss, test_accuracy = evaluate_one_epoch(model, test_loader, device)
+        test_loss, test_accuracy = evaluate_one_epoch(model, test_loader, device, num_votes=12)
 
         current_learning_rate = optimizer.param_groups[0]['lr']
         print(f"\nlearning rate: {current_learning_rate:.6f}, train loss: {train_loss}, test loss: {test_loss}, train accuracy: {train_accuracy}%, test accuracy: {test_accuracy}%")
