@@ -129,6 +129,14 @@ def get_batch_norm_momentum(step_index, batch_size, init_decay, decay_rate, deca
     momentum_pt = 1.0 - batch_norm_decay_tf
     return momentum_pt
 
+def get_learning_rate(step_index, batch_size, base_learning_rate, decay_rate, decay_step, min_learning_rate):
+    global_step = step_index * batch_size
+    step_ratio = global_step // decay_step
+    new_learning_rate = base_learning_rate * (decay_rate ** step_ratio)
+    if new_learning_rate < min_learning_rate:
+        new_learning_rate = min_learning_rate
+    return new_learning_rate
+
 def normalize_unit_sphere(data):
     pos = data.pos
     point_centroid = pos.mean(dim=0, keepdim=True)
@@ -140,7 +148,8 @@ def normalize_unit_sphere(data):
     return data
 
 def train_one_epoch(model, loader, optimizer, device, regularization_loss_weight=0.001,
-                    global_step_count=0, batch_size=32, batch_norm_init_decay=0.5, batch_norm_decay_rate=0.5, batch_norm_decay_step=200000, batch_norm_decay_clip=0.99):
+                    global_step_count=0, batch_size=32, batch_norm_init_decay=0.5, batch_norm_decay_rate=0.5, batch_norm_decay_step=200000, batch_norm_decay_clip=0.99,
+                    base_learning_rate=0.001, learning_rate_decay_rate=0.7, learning_rate_decay_step=200000, learning_rate_min=0.0 ):
 
     model.train()
     total_loss = 0
@@ -150,17 +159,19 @@ def train_one_epoch(model, loader, optimizer, device, regularization_loss_weight
 
     pbar = tqdm(loader, desc='Training')
     for batch in pbar:
-
         batch_norm_momentum = get_batch_norm_momentum(step_index, batch_size, batch_norm_init_decay, batch_norm_decay_rate, batch_norm_decay_step, batch_norm_decay_clip)
         for module in model.modules():
             if isinstance(module, nn.BatchNorm1d):
                 module.momentum = batch_norm_momentum
-
-        # points
-        points, labels = get_batch(batch, device)
+        learning_rate = get_learning_rate(step_index, batch_size, base_learning_rate=base_learning_rate, decay_rate=learning_rate_decay_rate, decay_step=learning_rate_decay_step, min_learning_rate=learning_rate_min)
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = learning_rate
 
         # clear
         optimizer.zero_grad()
+
+        # points
+        points, labels = get_batch(batch, device)
 
         # forward
         logits, trans_feat = model(points)
@@ -222,9 +233,9 @@ def train(
     batch_size = 32,
     num_epochs = 250, # 250
     learning_rate = 0.001, # 0.01, 0.001
-    learning_rate_step_size = 20,
+    learning_rate_decay_step = 200000,
     learning_rate_decay_factor = 0.7,
-    min_learning_rate = 0,
+    min_learning_rate = 1e-5,
     regularization_loss_weight = 0.001,
     dropout_prob = 0.3,
     adam_weight_decay = 0 ,# 0, 1e-4
@@ -244,29 +255,29 @@ def train(
     file_path = os.environ.get("MODELNET_ROOT", default_colab_root if is_colab else default_local_root)
 
     # # params!
-    # model_name = "ModelNet40"  # ModelNet10 or ModelNet40
-    # batch_size = 32
-    # num_epochs = 250 # 250
-    # learning_rate = 0.001 # 0.01, 0.001
-    # learning_rate_step_size = 20
-    # learning_rate_decay_factor = 0.7
-    # min_learning_rate = 0
-    # regularization_loss_weight = 0.001
-    # dropout_prob = 0.3
-    # adam_weight_decay = 0 # 0, 1e-4
-    # augment_training_data = True
-    # num_points = 1024 # sample points from models
-    # batch_norm_init_decay = 0.5
-    # batch_norm_decay_rate = 0.5
-    # batch_norm_decay_step = 200000
-    # batch_norm_decay_clip = 0.99
+    # model_name = "ModelNet40",  # ModelNet10 or ModelNet40
+    # batch_size = 32,
+    # num_epochs = 250,  # 250
+    # learning_rate = 0.001,  # 0.01, 0.001
+    # learning_rate_decay_steps = 200000,
+    # learning_rate_decay_factor = 0.7,
+    # min_learning_rate = 1e-5,
+    # regularization_loss_weight = 0.001,
+    # dropout_prob = 0.3,
+    # adam_weight_decay = 0,  # 0, 1e-4
+    # augment_training_data = True,
+    # num_points = 1024,  # sample points from 3d models
+    # batch_norm_init_decay = 0.5,
+    # batch_norm_decay_rate = 0.5,
+    # batch_norm_decay_step = 200000,
+    # batch_norm_decay_clip = 0.99,
 
     # reload data all the time
     will_force_reload = False
 
     config_name = (
         f"{model_name}_bs{batch_size}_ep{num_epochs}"
-        f"_lr{learning_rate}_schedS{learning_rate_step_size}"
+        f"_lr{learning_rate}_schedS{learning_rate_decay_step}"
         f"_schedD{learning_rate_decay_factor}"
         f"_reg{regularization_loss_weight}_drop{dropout_prob}"
         f"_wd{adam_weight_decay}"
@@ -339,9 +350,8 @@ def train(
     model = PointNetClassification(num_classes=number_of_classes, dropout_probability=dropout_prob)
     model = model.to(device)
 
-    # optimizer
+    # optimizer with adam
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=adam_weight_decay)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=learning_rate_step_size, gamma=learning_rate_decay_factor)
 
     # training loop
     best_test_accuracy = 0
@@ -356,21 +366,14 @@ def train(
 
         # train
         train_loss, train_accuracy, global_step_count = train_one_epoch(model, train_loader, optimizer, device, regularization_loss_weight,
-                                                                        global_step_count=global_step_count, batch_size=batch_size, batch_norm_init_decay=batch_norm_init_decay, batch_norm_decay_rate=batch_norm_decay_rate, batch_norm_decay_step=batch_norm_decay_step, batch_norm_decay_clip=batch_norm_decay_clip)
+                                                                        global_step_count=global_step_count, batch_size=batch_size, batch_norm_init_decay=batch_norm_init_decay, batch_norm_decay_rate=batch_norm_decay_rate, batch_norm_decay_step=batch_norm_decay_step, batch_norm_decay_clip=batch_norm_decay_clip,
+                                                                        base_learning_rate=learning_rate, learning_rate_decay_rate=learning_rate_decay_factor, learning_rate_decay_step=learning_rate_decay_step, learning_rate_min=min_learning_rate)
 
         # evaluate
         test_loss, test_accuracy = evaluate_one_epoch(model, test_loader, device)
 
-
-        # learning rate schedule step
-        scheduler.step()
-
-        # have floor for learning rate
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = max(param_group['lr'], min_learning_rate)
-        current_lr = optimizer.param_groups[0]['lr']
-
-        print(f"\nlearning rate: {current_lr:.6f}, train loss: {train_loss}, test loss: {test_loss}, train accuracy: {train_accuracy}%, test accuracy: {test_accuracy}%")
+        current_learning_rate = optimizer.param_groups[0]['lr']
+        print(f"\nlearning rate: {current_learning_rate:.6f}, train loss: {train_loss}, test loss: {test_loss}, train accuracy: {train_accuracy}%, test accuracy: {test_accuracy}%")
 
         # save for plot
         train_losses.append(train_loss)
@@ -386,7 +389,7 @@ def train(
 
     print(f"best test accuracy {best_test_accuracy}%")
     plot_curves(train_losses, test_losses, train_accuracies, test_accuracies, config_name)
-    log_result(config_name=config_name, model_name=model_name, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate, learning_rate_step_size=learning_rate_step_size, learning_rate_decay_factor=learning_rate_decay_factor, min_learning_rate=min_learning_rate, regularization_loss_weight=regularization_loss_weight, dropout_prob=dropout_prob, adam_weight_decay=adam_weight_decay, augment_training_data=augment_training_data, num_points=num_points, batch_norm_init_decay=batch_norm_init_decay, batch_norm_decay_rate=batch_norm_decay_rate, batch_norm_decay_step=batch_norm_decay_step, batch_norm_decay_clip=batch_norm_decay_clip, best_test_accuracy=best_test_accuracy)
+    log_result(config_name=config_name, model_name=model_name, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate, learning_rate_step_size=learning_rate_decay_step, learning_rate_decay_factor=learning_rate_decay_factor, min_learning_rate=min_learning_rate, regularization_loss_weight=regularization_loss_weight, dropout_prob=dropout_prob, adam_weight_decay=adam_weight_decay, augment_training_data=augment_training_data, num_points=num_points, batch_norm_init_decay=batch_norm_init_decay, batch_norm_decay_rate=batch_norm_decay_rate, batch_norm_decay_step=batch_norm_decay_step, batch_norm_decay_clip=batch_norm_decay_clip, best_test_accuracy=best_test_accuracy)
 
 if __name__ == '__main__':
     train()

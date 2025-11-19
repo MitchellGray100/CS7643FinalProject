@@ -26,7 +26,7 @@ class PointNetClassification(nn.Module):
         x = self.fully_connected_layer_1(x)
         x = self.batch_norm_1(x)
         x = self.relu(x)
-        x = self.dropout_layer(x)
+        # x = self.dropout_layer(x)
 
         # fc 512 to 256
         x = self.fully_connected_layer_2(x)
