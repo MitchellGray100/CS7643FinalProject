@@ -43,56 +43,76 @@ class PillarVoxelizer:
         """
         process a single batch of points and create the pillars
         """
-        points = points.to(self.device)             # points: (N, 3).
-
-        x, y, z = points[:, 0], points[:, 1], points[:, 2]
-        # clamp
-        in_range = (
-            (x >= self.x_min) & (x < self.x_max) &
-            (y >= self.y_min) & (y < self.y_max) &
-            (z >= self.z_min) & (z < self.z_max)
-        )
-        points = points[in_range]
-        x, y, z = x[in_range], y[in_range], z[in_range]
-        N = points.size(0)
+        points = points.to(self.device) # points: (N, 3). 
+        x, y, z = points[:, 0], points[:, 1], points[:, 2] 
+        # clamp 
+        in_range = ( 
+            (x >= self.x_min) & (x < self.x_max) 
+            & (y >= self.y_min) & (y < self.y_max) 
+            & (z >= self.z_min) & (z < self.z_max) 
+            ) 
         
-        # discretize
-        ix = torch.floor((x - self.x_min) / self.x_size).long()
-        iy = torch.floor((y - self.y_min) / self.y_size).long()
-        ix = torch.clamp(ix, 0, self.nx - 1)
-        iy = torch.clamp(iy, 0, self.ny - 1)
+        points = points[in_range] 
+        x, y, z = x[in_range], y[in_range], z[in_range] 
+        N = points.size(0) 
+        
+        # discretize 
+        ix = torch.floor((x - self.x_min) / self.x_size).long() 
+        iy = torch.floor((y - self.y_min) / self.y_size).long() 
+        ix = torch.clamp(ix, 0, self.nx - 1) 
+        iy = torch.clamp(iy, 0, self.ny - 1) 
+        
+        # vectorized 
+        # # get unique pillars 
+        coords = torch.stack([ix, iy], dim=-1) # (N, 2) 
+        uniq_coords, inv = torch.unique(coords, dim=0, return_inverse=True) # inv : inverse indices 
+        
+        # limit numbero f pillars 
+        P = uniq_coords.shape[0] 
+        if P > self.max_pillars: 
+            perm = torch.randperm(P, device=self.device)[:self.max_pillars] 
+            uniq_coords = uniq_coords[perm] 
+            # pillars kept 
+            mask = (inv[:, None] == perm[None, :]).any(dim=1) # (N, P) -> (N,) 
+            inv = inv[mask] 
+            
+            # mapping points -> pillars 
+            points = points[mask] 
+            # points in the pillars kept 
+            coords = coords[mask] 
+            # coords of points in the pillars kept 
+            P = self.max_pillars 
 
-
-        # group by ix, iy
-        # pillar is a dict of list-keys [ix, iy] -> list-items [x, y, z]
-        pillars = defaultdict(list)
-        for idx in range(N):
-            key = (ix[idx].item(), iy[idx].item())
-            pillars[key].append(points[idx])
-
-        # limit number of pillars
-        pillar_keys = list(pillars.keys())
-        if len(pillar_keys) > self.max_pillars:
-            perm = torch.randperm(len(pillar_keys))[:self.max_pillars]
-            pillar_keys = [pillar_keys[i] for i in perm.tolist()]
-
-        # init outputs
-        pillar_features = torch.zeros(
-            (self.max_pillars, self.max_points_per_pillar, self.in_dim),            # (P, N, D)
-            device=self.device
-        )
-        pillar_coords = torch.zeros(
-            (self.max_pillars, 2), dtype=torch.long,                                # (P, 2)
-            device=self.device
-        )
+        # sort points by pillar 
+        sort_idx = torch.argsort(inv) 
+        points_sorted = points[sort_idx] 
+        inv_sorted = inv[sort_idx] 
+        
+        # counts points per pillar 
+        counts = torch.bincount(inv_sorted, minlength=P).clamp(max=self.max_points_per_pillar) 
+        
+        # cum to split : get starting indices of each pillar in the sorted points 
+        splits = torch.cat([torch.tensor([0], device=self.device), counts.cumsum(dim=0)]) 
+        
+        # init outputs 
+        pillar_features = torch.zeros( 
+            (self.max_pillars, self.max_points_per_pillar, self.in_dim), # (P, N, D) 
+            device=self.device 
+            ) 
+        pillar_coords = torch.zeros( 
+            (self.max_pillars, 2), dtype=torch.long, # (P, 2) 
+            device=self.device 
+            ) 
         pillar_mask = torch.zeros(
-            (self.max_pillars,), dtype=torch.float32, device=self.device            # (P, )
-        )
+             (self.max_pillars,), dtype=torch.float32, device=self.device # (P, ) 
+            )
         
         # build augmented features for each pillar
-        for p_idx, (ix_cell, iy_cell) in enumerate(pillar_keys):
-            pts_list = pillars[(ix_cell, iy_cell)]
-            pts = torch.stack(pts_list, dim=0)
+        for p in range(P):
+            start = splits[p].item() 
+            end = splits[p+1].item() 
+            pts = points_sorted[start:end]
+
             n_pts = pts.size(0)
 
             # limit the number of points in the pillar
@@ -102,8 +122,8 @@ class PillarVoxelizer:
             else:
                 pass # zero padded
 
-            x_center = self.x_min + (ix_cell + 0.5) * self.x_size
-            y_center = self.y_min + (iy_cell + 0.5) * self.y_size
+            x_center = self.x_min + (uniq_coords[p, 0].float() + 0.5) * self.x_size 
+            y_center = self.y_min + (uniq_coords[p, 1].float() + 0.5) * self.y_size
             x_mean = pts[:, 0].mean()
             y_mean = pts[:, 1].mean()
             z_mean = pts[:, 2].mean()
@@ -118,10 +138,9 @@ class PillarVoxelizer:
 
             # write into output tensors
             K_eff = min(n_pts, self.max_points_per_pillar)
-            pillar_features[p_idx, :K_eff, :] = feat[:K_eff]
-            pillar_coords[p_idx, 0] = ix_cell
-            pillar_coords[p_idx, 1] = iy_cell
-            pillar_mask[p_idx] = 1.0
+            pillar_features[p, :K_eff, :] = feat[:K_eff]
+        pillar_coords[:P] = uniq_coords 
+        pillar_mask[:P] = 1.0
 
         return pillar_features, pillar_coords, pillar_mask
     
