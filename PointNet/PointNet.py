@@ -1,4 +1,7 @@
 from TNet import TNet
+# REFERENCE:
+# Official point net Github with TensorFlow: https://github.com/charlesq34/pointnet
+
 import torch
 import torch.nn as nn
 

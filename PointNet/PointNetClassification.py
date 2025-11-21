@@ -1,3 +1,6 @@
+# REFERENCE:
+# Official point net Github with TensorFlow: https://github.com/charlesq34/pointnet
+
 from PointNet import PointNet
 import torch.nn as nn
 

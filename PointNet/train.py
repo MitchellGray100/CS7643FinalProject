@@ -1,3 +1,6 @@
+# REFERENCE:
+# Official point net Github with TensorFlow: https://github.com/charlesq34/pointnet
+
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -413,7 +416,7 @@ def train(
                                                                         base_learning_rate=learning_rate, learning_rate_decay_rate=learning_rate_decay_factor, learning_rate_decay_step=learning_rate_decay_step, learning_rate_min=min_learning_rate)
 
         # evaluate
-        test_loss, test_accuracy = evaluate_one_epoch(model, test_loader, device, num_votes=12)
+        test_loss, test_accuracy = evaluate_one_epoch(model, test_loader, device, num_votes=1)
 
         current_learning_rate = optimizer.param_groups[0]['lr']
         print(f"\nlearning rate: {current_learning_rate:.6f}, train loss: {train_loss}, test loss: {test_loss}, train accuracy: {train_accuracy}%, test accuracy: {test_accuracy}%")
@@ -435,4 +438,4 @@ def train(
     log_result(config_name=config_name, model_name=model_name, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate, learning_rate_step_size=learning_rate_decay_step, learning_rate_decay_factor=learning_rate_decay_factor, min_learning_rate=min_learning_rate, regularization_loss_weight=regularization_loss_weight, dropout_prob=dropout_prob, adam_weight_decay=adam_weight_decay, augment_training_data=augment_training_data, num_points=num_points, batch_norm_init_decay=batch_norm_init_decay, batch_norm_decay_rate=batch_norm_decay_rate, batch_norm_decay_step=batch_norm_decay_step, batch_norm_decay_clip=batch_norm_decay_clip, best_test_accuracy=best_test_accuracy)
 
 if __name__ == '__main__':
-    train()
+    train(model_name = "ModelNet40")

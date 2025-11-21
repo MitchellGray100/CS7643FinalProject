@@ -1,3 +1,6 @@
+# REFERENCE:
+# Official point net Github with TensorFlow: https://github.com/charlesq34/pointnet
+
 import csv
 import itertools
 import os

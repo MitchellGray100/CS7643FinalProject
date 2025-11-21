@@ -1,3 +1,6 @@
+# REFERENCE:
+# Official point net Github with TensorFlow: https://github.com/charlesq34/pointnet
+
 import torch
 
 def apply_random_y_rotation(data):

@@ -1,3 +1,6 @@
+# REFERENCE:
+# Official point net Github with TensorFlow: https://github.com/charlesq34/pointnet
+
 import torch
 
 def t_net_regularization_loss(transform_matrix_feature):
