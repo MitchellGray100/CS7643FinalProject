@@ -2,7 +2,7 @@ config = {
     "dataset": {
         "name": "ModelNet10",
         "num_classes": 10,
-        "num_points": 2048,
+        "num_points": 4096,
     },
     "voxelizer": {
         "x_range": (-1.0, 1.0),
