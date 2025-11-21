@@ -117,37 +117,42 @@ def get_batch(batch, device):
     batch_size = batch.y.size(0)
     total_num_points = batch.pos.size(0) // batch_size
     points = batch.pos.reshape(batch_size, total_num_points, 3)
-    points = points.transpose(2, 1).contiguous()
-
-    return points.to(device), batch.y.to(device)
+    points = points.transpose(2, 1)
+    points = points.contiguous()
+    points_on_device = points.to(device)
+    labels_on_device = batch.y.to(device)
+    return points_on_device, labels_on_device
 
 def count_correct(pred, labels):
     return (pred == labels).sum().item()
 
 def get_batch_norm_momentum(step_index, batch_size, init_decay, decay_rate, decay_step, decay_clip):
-    global_step = step_index * batch_size
-    step_ratio = float(global_step)/float(decay_step)
-    batch_norm_momentum_deduction = init_decay * (decay_rate**step_ratio)
-    batch_norm_decay_tf = min(decay_clip, 1.0 - batch_norm_momentum_deduction)
-    momentum_pt = 1.0 - batch_norm_decay_tf
-    return momentum_pt
+    total_samples_processed = step_index * batch_size
+    num_decay_periods = float(total_samples_processed)/float(decay_step)
+    batch_norm_momentum_deduction = init_decay * (decay_rate**num_decay_periods)
+    batch_norm_decay_original = 1.0 - batch_norm_momentum_deduction
+    batch_norm_decay_original = min(decay_clip, batch_norm_decay_original)
+    new_momentum = 1.0 - batch_norm_decay_original
+    return new_momentum
 
 def get_learning_rate(step_index, batch_size, base_learning_rate, decay_rate, decay_step, min_learning_rate):
-    global_step = step_index * batch_size
-    step_ratio = global_step // decay_step
-    new_learning_rate = base_learning_rate * (decay_rate ** step_ratio)
+    total_samples_processed  = step_index * batch_size
+    num_decay_steps = total_samples_processed  // decay_step
+    new_learning_rate = base_learning_rate * (decay_rate ** num_decay_steps)
     if new_learning_rate < min_learning_rate:
         new_learning_rate = min_learning_rate
+    else:
+        new_learning_rate = new_learning_rate
     return new_learning_rate
 
 def normalize_unit_sphere(data):
     pos = data.pos
     point_centroid = pos.mean(dim=0, keepdim=True)
     pos = pos - point_centroid
-    distances = torch.sqrt((pos ** 2).sum(dim=1))
-    max_distance = distances.max()
-    pos = pos/max_distance
-    data.pos = pos
+    distances_from_origin = torch.sqrt((pos ** 2).sum(dim=1))
+    max_distance_from_origin = distances_from_origin.max()
+    normalized_pos = pos/max_distance_from_origin
+    data.pos = normalized_pos
     return data
 
 def train_one_epoch(model, loader, optimizer, device, regularization_loss_weight=0.001,
@@ -197,8 +202,7 @@ def train_one_epoch(model, loader, optimizer, device, regularization_loss_weight
         correct_pred_num += count_correct(pred, labels)
         total_samples_num += labels.size(0)
 
-        pbar.set_postfix({'loss': loss.item(),
-                          'accuracy': (correct_pred_num / total_samples_num) * 100})
+        pbar.set_postfix({'loss': loss.item(), 'accuracy': (correct_pred_num / total_samples_num)*100})
 
         step_index += 1
 
@@ -207,70 +211,28 @@ def train_one_epoch(model, loader, optimizer, device, regularization_loss_weight
 
     return average_loss, average_accuracy, step_index
 
-def evaluate_one_epoch( model, loader, device, num_votes=1):
+def evaluate_one_epoch( model, loader, device):
     model.eval()
 
-    #  num vote == 1
-    if num_votes == 1:
-        correct_pred_num = 0
-        total_samples_num = 0
-        total_loss = 0.0
+    correct_pred_num = 0
+    total_samples_num = 0
+    total_loss = 0
 
-        with torch.no_grad():
-            for batch in tqdm(loader, desc='Evaluating'):
-                points, labels = get_batch(batch, device)
-                logits, transform_matrix_feature = model(points)
+    with torch.no_grad():
+        for batch in tqdm(loader, desc='Evaluating'):
+            points, labels = get_batch(batch, device)
 
-                loss = F.cross_entropy(logits, labels)
-                total_loss += loss.item()
+            logits, transform_matrix_feature = model(points)
 
-                pred = logits.argmax(dim=1)
-                correct_pred_num += count_correct(pred, labels)
-                total_samples_num += labels.size(0)
+            pred = logits.argmax(dim=1)
+            correct_pred_num += count_correct(pred, labels)
+            total_samples_num += labels.size(0)
 
-        average_loss = total_loss / len(loader)
-        accuracy = (correct_pred_num/total_samples_num) * 100
-        return average_loss, accuracy
+            loss = F.cross_entropy(logits, labels)
+            total_loss += loss.item()
 
-    # num votes > 1
-    accumulated_logits = None
-    labels_all = None
-    total_loss = 0.0
-
-    for vote in range(num_votes):
-        vote_logits_list = []
-        vote_labels_list = []
-
-        with torch.no_grad():
-            for batch in tqdm(loader, desc=f"Evaluating vote {vote+1}/{num_votes}"):
-                points, labels = get_batch(batch, device)
-                logits, transform_matrix_feature = model(points)
-
-                loss = F.cross_entropy(logits, labels)
-                total_loss += loss.item()
-                # use cpu memory
-                vote_logits_list.append(logits.cpu())
-                vote_labels_list.append(labels.cpu())
-
-        vote_logits = torch.cat(vote_logits_list, dim=0)
-        vote_labels = torch.cat(vote_labels_list, dim=0)
-
-        if accumulated_logits is None:
-            accumulated_logits = vote_logits
-            labels_all = vote_labels
-        else:
-            accumulated_logits += vote_logits
-
-    average_loss = total_loss / (len(loader) * num_votes)
-
-    accumulated_logits /= float(num_votes)
-    pred = accumulated_logits.argmax(dim=1)
-
-    correct_pred_num = (pred == labels_all).sum().item()
-    total_samples_num = labels_all.size(0)
-
-    accuracy = (correct_pred_num / total_samples_num) * 100
-
+    average_loss = total_loss / len(loader)
+    accuracy = (correct_pred_num/total_samples_num) * 100
     return average_loss, accuracy
 
 
@@ -290,8 +252,7 @@ def train(
     batch_norm_init_decay = 0.5,
     batch_norm_decay_rate = 0.5,
     batch_norm_decay_step = 200000,
-    batch_norm_decay_clip = 0.99,
-):
+    batch_norm_decay_clip = 0.99):
 
     model_path = None
     number_of_classes = 0
@@ -331,8 +292,7 @@ def train(
         f"_bnID{batch_norm_init_decay}"
         f"_bnDR{batch_norm_decay_rate}"
         f"_bnDS{batch_norm_decay_step}"
-        f"_bnDC{batch_norm_decay_clip}"
-    )
+        f"_bnDC{batch_norm_decay_clip}")
 
     if model_name == "ModelNet10":
         model_path = os.path.join(file_path, "ModelNet10")
@@ -353,18 +313,15 @@ def train(
             SamplePoints(num_points),
             normalize_unit_sphere,
             augment_train_data.apply_random_y_rotation,
-            augment_train_data.apply_random_jitter,
-        ])
+            augment_train_data.apply_random_jitter])
     else:
         train_transform = Compose([
             SamplePoints(num_points),
-            normalize_unit_sphere,
-        ])
+            normalize_unit_sphere])
 
     test_transform = Compose([
         SamplePoints(num_points),
-        normalize_unit_sphere,
-    ])
+        normalize_unit_sphere])
 
     train_dataset = ModelNet(
         root=model_path,
@@ -372,8 +329,7 @@ def train(
         train=True,
         pre_transform=None,
         force_reload=will_force_reload,
-        transform=train_transform,
-    )
+        transform=train_transform)
 
     test_dataset = ModelNet(
         root=model_path,
@@ -381,16 +337,13 @@ def train(
         train=False,
         pre_transform=None,
         force_reload=will_force_reload,
-        transform=test_transform,
-    )
+        transform=test_transform)
 
     num_workers = 4
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     print(f"number of classes {train_dataset.num_classes}")
-    print(f"train n samples: {len(train_dataset)}")
-    print(f"test n samples: {len(test_dataset)}")
 
     # PointNetClassification
     model = PointNetClassification(num_classes=number_of_classes, dropout_probability=dropout_prob)
@@ -416,7 +369,7 @@ def train(
                                                                         base_learning_rate=learning_rate, learning_rate_decay_rate=learning_rate_decay_factor, learning_rate_decay_step=learning_rate_decay_step, learning_rate_min=min_learning_rate)
 
         # evaluate
-        test_loss, test_accuracy = evaluate_one_epoch(model, test_loader, device, num_votes=1)
+        test_loss, test_accuracy = evaluate_one_epoch(model, test_loader, device)
 
         current_learning_rate = optimizer.param_groups[0]['lr']
         print(f"\nlearning rate: {current_learning_rate:.6f}, train loss: {train_loss}, test loss: {test_loss}, train accuracy: {train_accuracy}%, test accuracy: {test_accuracy}%")
@@ -424,18 +377,17 @@ def train(
         # save for plot
         train_losses.append(train_loss)
         train_accuracies.append(train_accuracy)
-        test_accuracies.append(test_accuracy)
         test_losses.append(test_loss)
+        test_accuracies.append(test_accuracy)
 
-        if test_accuracy > best_test_accuracy:
-            best_test_accuracy = test_accuracy
-            # # save best model
-            # torch.save(model.state_dict(), 'model/pointnet_model.pth')
-            # print(f"save model test accuracy: {best_test_accuracy}%)")
 
     print(f"best test accuracy {best_test_accuracy}%")
     plot_curves(train_losses, test_losses, train_accuracies, test_accuracies, config_name)
-    log_result(config_name=config_name, model_name=model_name, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate, learning_rate_step_size=learning_rate_decay_step, learning_rate_decay_factor=learning_rate_decay_factor, min_learning_rate=min_learning_rate, regularization_loss_weight=regularization_loss_weight, dropout_prob=dropout_prob, adam_weight_decay=adam_weight_decay, augment_training_data=augment_training_data, num_points=num_points, batch_norm_init_decay=batch_norm_init_decay, batch_norm_decay_rate=batch_norm_decay_rate, batch_norm_decay_step=batch_norm_decay_step, batch_norm_decay_clip=batch_norm_decay_clip, best_test_accuracy=best_test_accuracy)
+    log_result(config_name=config_name, model_name=model_name, batch_size=batch_size, num_epochs=num_epochs,
+               learning_rate=learning_rate, learning_rate_step_size=learning_rate_decay_step, learning_rate_decay_factor=learning_rate_decay_factor, min_learning_rate=min_learning_rate,
+               regularization_loss_weight=regularization_loss_weight, dropout_prob=dropout_prob,
+               adam_weight_decay=adam_weight_decay, augment_training_data=augment_training_data, num_points=num_points,
+               batch_norm_init_decay=batch_norm_init_decay, batch_norm_decay_rate=batch_norm_decay_rate, batch_norm_decay_step=batch_norm_decay_step, batch_norm_decay_clip=batch_norm_decay_clip, best_test_accuracy=best_test_accuracy)
 
 if __name__ == '__main__':
     train(model_name = "ModelNet40")

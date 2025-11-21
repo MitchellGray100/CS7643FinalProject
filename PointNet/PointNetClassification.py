@@ -10,7 +10,6 @@ class PointNetClassification(nn.Module):
 
         self.feature_extraction = PointNet()
 
-        # head
         self.fully_connected_layer_1 = nn.Linear(1024, 512)
         self.fully_connected_layer_2 = nn.Linear(512, 256)
         self.fully_connected_layer_3 = nn.Linear(256, num_classes)
@@ -29,7 +28,6 @@ class PointNetClassification(nn.Module):
         x = self.fully_connected_layer_1(x)
         x = self.batch_norm_1(x)
         x = self.relu(x)
-        # x = self.dropout_layer(x)
 
         # fc 512 to 256
         x = self.fully_connected_layer_2(x)

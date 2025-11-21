@@ -134,25 +134,6 @@ def log_config(config, path=search_log_path):
         csv_writer.writerow(row)
 
 
-def make_grid_config_list():
-    param_names = list(param_grid.keys())
-    config_list = []
-    for value_tuple in itertools.product(*(param_grid[name] for name in param_names)):
-        config = dict(zip(param_names, value_tuple))
-        config_list.append(config)
-    return config_list
-
-
-def make_random_config_list(num_trials):
-    config_list = []
-    for _ in range(num_trials):
-        config = {}
-        for param_name, param_values in param_grid.items():
-            config[param_name] = random.choice(param_values)
-        config_list.append(config)
-    return config_list
-
-
 def make_single_param_sweep_config_list(default_param_grid, param_grid, include_default_config=True):
     config_list = []
     default_config = {
@@ -203,16 +184,6 @@ def run_config_list(config_list):
         completed_set.add(config_key)
 
 
-def grid_search():
-    config_list = make_grid_config_list()
-    run_config_list(config_list)
-
-
-def random_search(num_trials=10):
-    config_list = make_random_config_list(num_trials)
-    run_config_list(config_list)
-
-
 def single_param_sweep_search():
     config_list = make_single_param_sweep_config_list(
         default_param_grid=default_param_grid,
@@ -224,5 +195,3 @@ def single_param_sweep_search():
 
 if __name__ == "__main__":
     single_param_sweep_search()
-    # grid_search()
-    # random_search(num_trials=10)
