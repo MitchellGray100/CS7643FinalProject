@@ -1,7 +1,0 @@
-model_name,batch_size,num_epochs,learning_rate,learning_rate_step_size,learning_rate_decay_factor,min_learning_rate,regularization_weight,dropout_prob,adam_weight_decay,augment_training_data,num_points
-ModelNet10,32,200,0.001,20,0.7,0.0,0.001,0.3,0.0,1,1024
-ModelNet10,16,200,0.001,20,0.7,0.0,0.001,0.3,0.0,1,1024
-ModelNet10,64,200,0.001,20,0.7,0.0,0.001,0.3,0.0,1,1024
-ModelNet10,32,200,0.01,20,0.7,0.0,0.001,0.3,0.0,1,1024
-ModelNet10,32,200,0.0001,20,0.7,0.0,0.001,0.3,0.0,1,1024
-ModelNet10,32,200,0.001,20,0.7,0.0,0.001,0.0,0.0,1,1024

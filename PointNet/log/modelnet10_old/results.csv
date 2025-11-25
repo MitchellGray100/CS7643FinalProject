@@ -1,7 +1,0 @@
-config_name,model_name,batch_size,num_epochs,learning_rate,learning_rate_step_size,learning_rate_decay_factor,min_learning_rate,regularization_weight,dropout_prob,adam_weight_decay,augment_training_data,num_points,best_test_accuracy
-ModelNet10_bs32_ep200_lr0.001_schedS20_schedD0.7_reg0.001_drop0.3_wd0.0_aug1_pts1024,ModelNet10,32,200,0.001,20,0.7,0,0.001,0.3,0.0,1,1024,91.18942731277532
-ModelNet10_bs16_ep200_lr0.001_schedS20_schedD0.7_reg0.001_drop0.3_wd0.0_aug1_pts1024,ModelNet10,16,200,0.001,20,0.7,0,0.001,0.3,0.0,1,1024,91.07929515418502
-ModelNet10_bs64_ep200_lr0.001_schedS20_schedD0.7_reg0.001_drop0.3_wd0.0_aug1_pts1024,ModelNet10,64,200,0.001,20,0.7,0,0.001,0.3,0.0,1,1024,90.85903083700441
-ModelNet10_bs32_ep200_lr0.01_schedS20_schedD0.7_reg0.001_drop0.3_wd0.0_aug1_pts1024,ModelNet10,32,200,0.01,20,0.7,0,0.001,0.3,0.0,1,1024,91.96035242290749
-ModelNet10_bs32_ep200_lr0.0001_schedS20_schedD0.7_reg0.001_drop0.3_wd0.0_aug1_pts1024,ModelNet10,32,200,0.0001,20,0.7,0,0.001,0.3,0.0,1,1024,91.40969162995594
-ModelNet10_bs32_ep200_lr0.001_schedS20_schedD0.7_reg0.001_drop0_wd0.0_aug1_pts1024,ModelNet10,32,200,0.001,20,0.7,0,0.001,0,0.0,1,1024,91.62995594713657
