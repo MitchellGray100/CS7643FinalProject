@@ -5,7 +5,6 @@ import torch
 
 def t_net_regularization_loss(transform_matrix_feature):
     # (batch_size, k, k)
-    batch_size = transform_matrix_feature.size(0)
     transform_dimension = transform_matrix_feature.size(1)
 
     # element A @ A^T

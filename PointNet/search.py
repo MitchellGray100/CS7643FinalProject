@@ -2,12 +2,11 @@
 # Official point net Github with TensorFlow: https://github.com/charlesq34/pointnet
 
 import csv
-import itertools
 import os
-import random
 import time
 
 from train import train
+
 
 log_dir = "log"
 search_log_path = os.path.join(log_dir, "search_log.csv")
@@ -32,34 +31,34 @@ csv_field_names = [
 ]
 
 default_param_grid = {
-    "model_name": ["ModelNet40"],
+    "model_name": ["ModelNet10"],
     "batch_size": [32],
-    "num_epochs": [250],
+    "num_epochs": [200], # 250
     "learning_rate": [0.001],
-    "learning_rate_decay_step": [200000],
+    "learning_rate_decay_step": [80000],
     "learning_rate_decay_factor": [0.7],
     "min_learning_rate": [0],
     "regularization_loss_weight": [0.001],
-    "dropout_prob": [0.3],
+    "dropout_prob": [0.5],
     "adam_weight_decay": [0.0],
     "augment_training_data": [True],
     "num_points": [1024],
     "batch_norm_init_decay": [0.5],
     "batch_norm_decay_rate": [0.5],
-    "batch_norm_decay_step": [200000],
+    "batch_norm_decay_step": [8000],
     "batch_norm_decay_clip": [0.99],
 }
 
 param_grid = {
     "model_name": ["ModelNet40"],
     "batch_size": [16, 32, 64],
-    "num_epochs": [250],
+    "num_epochs": [50],
     "learning_rate": [0.01, 0.001, 0.0001],
     "learning_rate_decay_step":  [200000],
     "learning_rate_decay_factor": [0.7],
     "min_learning_rate": [0],
     "regularization_loss_weight": [0.001],
-    "dropout_prob": [0, 0.3, 0.6],
+    "dropout_prob": [0, 0.3, 0.2],
     "adam_weight_decay": [0.0],
     "augment_training_data": [True, False],
     "num_points": [1024],
@@ -144,16 +143,16 @@ def make_single_param_sweep_config_list(default_param_grid, param_grid, include_
     if include_default_config:
         config_list.append(default_config.copy())
 
-    # sweep each param
-    for param_name, sweep_values in param_grid.items():
-        default_value = default_config[param_name]
-        for param_value in sweep_values:
-            if param_value == default_value:
-                continue
+    # # sweep each param
+    # for param_name, sweep_values in param_grid.items():
+    #     default_value = default_config[param_name]
+    #     for param_value in sweep_values:
+    #         if param_value == default_value:
+    #             continue
 
-            config = default_config.copy()
-            config[param_name] = param_value
-            config_list.append(config)
+    #         config = default_config.copy()
+    #         config[param_name] = param_value
+    #         config_list.append(config)
 
     return config_list
 

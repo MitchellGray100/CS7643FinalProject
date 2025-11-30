@@ -1,0 +1,4 @@
+config_name,model_name,batch_size,num_epochs,learning_rate,learning_rate_step_size,learning_rate_decay_factor,min_learning_rate,regularization_loss_weight,dropout_prob,adam_weight_decay,augment_training_data,num_points,batch_norm_init_decay,batch_norm_decay_rate,batch_norm_decay_step,batch_norm_decay_clip,best_test_accuracy
+ModelNet10_bs32_ep5_lr0.001_schedS200000_schedD0.7_reg0.001_drop0.3_wd0_aug1_pts1024_bnID0.5_bnDR0.5_bnDS200000_bnDC0.99,ModelNet10,32,5,0.001,200000,0.7,1e-05,0.001,0.3,0,1,1024,0.5,0.5,200000,0.99,0
+ModelNet10_bs32_ep250_lr0.001_schedS2500_schedD0.7_reg0.001_drop0.5_wd0.0_aug1_pts1024_bnID0.5_bnDR0.5_bnDS2500_bnDC0.99,ModelNet10,32,250,0.001,2500,0.7,0,0.001,0.5,0.0,1,1024,0.5,0.5,2500,0.99,0
+ModelNet10_bs32_ep200_lr0.001_schedS80000_schedD0.7_reg0.001_drop0.5_wd0.0_aug1_pts1024_bnID0.5_bnDR0.5_bnDS8000_bnDC0.99,ModelNet10,32,200,0.001,80000,0.7,0,0.001,0.5,0.0,1,1024,0.5,0.5,8000,0.99,92.51101321585902

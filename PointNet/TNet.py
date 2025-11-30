@@ -16,6 +16,8 @@ class TNet(nn.Module):
         self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, transform_dimension ** 2)
+        nn.init.constant_(self.fc3.weight, 0)
+        nn.init.constant_(self.fc3.bias, 0)
         
         self.batch_norm_1 = nn.BatchNorm1d(64)
         self.batch_norm_2 = nn.BatchNorm1d(128)

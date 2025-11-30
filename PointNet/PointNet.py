@@ -44,15 +44,15 @@ class PointNet(nn.Module):
         x = self.convolution_layer_2(x)
         x = self.batch_norm_2(x)
         x = self.relu(x)
+        
+        # feature transform 64 to 64 OPTIONAL?
+        transform_matrix_feature = self.feature_TNet(x)
+        x = torch.bmm(transform_matrix_feature, x).contiguous()
 
         # 64 to 64
         x = self.convolution_layer_3(x)
         x = self.batch_norm_3(x)
         x = self.relu(x)
-
-        # feature transform 64 to 64 OPTIONAL?
-        transform_matrix_feature = self.feature_TNet(x)
-        x = torch.bmm(transform_matrix_feature, x).contiguous()
 
         # 64 to 128
         x = self.convolution_layer_4(x)
