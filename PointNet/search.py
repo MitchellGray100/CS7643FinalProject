@@ -39,7 +39,7 @@ default_param_grid = {
     "learning_rate_decay_factor": [0.7],
     "min_learning_rate": [0],
     "regularization_loss_weight": [0.001],
-    "dropout_prob": [0.5],
+    "dropout_prob": [0.4],
     "adam_weight_decay": [0.0],
     "augment_training_data": [True],
     "num_points": [1024],

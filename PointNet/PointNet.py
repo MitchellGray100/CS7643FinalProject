@@ -5,66 +5,100 @@ from TNet import TNet
 import torch
 import torch.nn as nn
 
+class PointResBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(PointResBlock, self).__init__()
+        
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        
+        # first convolution
+        self.conv1 = nn.Conv1d(in_channels, out_channels, 1)
+        self.bn1 = nn.BatchNorm1d(out_channels)
+        self.relu = nn.ReLU()
+        
+        # Second Convolution 
+        self.conv2 = nn.Conv1d(out_channels, out_channels, 1)
+        self.bn2 = nn.BatchNorm1d(out_channels)
+        
+        # Skip Connection
+        self.shortcut = nn.Sequential()
+        
+        # If input and output channels differ, we must project x to match output
+        if in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv1d(in_channels, out_channels, 1),
+                nn.BatchNorm1d(out_channels)
+            )
+
+    def forward(self, x):
+        # Save identity (possibly projected)
+        identity = self.shortcut(x)
+        
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out) # non-linearity
+        
+        out = self.conv2(out)
+        out = self.bn2(out)
+        
+        # Path B: Addition
+        out += identity
+        
+        # Final Activation
+        out = self.relu(out)
+        return out
+
 class PointNet(nn.Module):
     def __init__(self):
-        nn.Module.__init__(self)
+        super(PointNet, self).__init__()
 
         self.input_TNet = TNet(transform_dimension=3)
         self.feature_TNet = TNet(transform_dimension=64)
 
-        self.convolution_layer_1 = nn.Conv1d(3, 64, 1)
-        self.convolution_layer_2 = nn.Conv1d(64, 64, 1)
-        self.convolution_layer_3 = nn.Conv1d(64, 64, 1)
-        self.convolution_layer_4 = nn.Conv1d(64, 128, 1)
-        self.convolution_layer_5 = nn.Conv1d(128, 1024, 1)
+        # Initial lifting layer: 3 -> 64
+        # We use a standard block here to get into feature space 
+        # before starting residual connections
+        self.initial_conv = nn.Sequential(
+            nn.Conv1d(3, 64, 1),
+            nn.BatchNorm1d(64),
+            nn.ReLU()
+        )
 
-        self.batch_norm_1 = nn.BatchNorm1d(64)
-        self.batch_norm_2 = nn.BatchNorm1d(64)
-        self.batch_norm_3 = nn.BatchNorm1d(64)
-        self.batch_norm_4 = nn.BatchNorm1d(128)
-        self.batch_norm_5 = nn.BatchNorm1d(1024)
+        # Encoder 1: Processing the 64-dim features
+        self.encoder_1 = nn.Sequential(
+            PointResBlock(64, 64),
+            PointResBlock(64, 64)
+        )
 
-        self.relu = nn.ReLU()
+        # Encoder 2: Deepening and expanding
+        self.encoder_2 = nn.Sequential(
+            PointResBlock(64, 64),  # Extra processing at 64
+            PointResBlock(64, 128), # Expand
+            PointResBlock(128, 1024) # Expand to Global Vector size
+        )
+        
         self.maxpool = nn.AdaptiveMaxPool1d(1)
 
     def forward(self, x):
         batch_size = x.size(0)
 
-        # input transform OPTIONAL?
+        # 1. Input Transform
         transform_matrix_input = self.input_TNet(x)
         x = torch.bmm(transform_matrix_input, x).contiguous()
 
-        # mlp
-        # 3 to 64
-        x = self.convolution_layer_1(x)
-        x = self.batch_norm_1(x)
-        x = self.relu(x)
-
-        # 64 to 64
-        x = self.convolution_layer_2(x)
-        x = self.batch_norm_2(x)
-        x = self.relu(x)
+        # 2. Lift to 64-dim space
+        x = self.initial_conv(x)
         
-        # feature transform 64 to 64 OPTIONAL?
+        # 3. Feature Transform (Applied early, on the "base" features)
         transform_matrix_feature = self.feature_TNet(x)
         x = torch.bmm(transform_matrix_feature, x).contiguous()
+        
+        # 4. Deep Residual Encoding
+        x = self.encoder_1(x)
+        x = self.encoder_2(x)
 
-        # 64 to 64
-        x = self.convolution_layer_3(x)
-        x = self.batch_norm_3(x)
-        x = self.relu(x)
-
-        # 64 to 128
-        x = self.convolution_layer_4(x)
-        x = self.batch_norm_4(x)
-        x = self.relu(x)
-
-        # 128 to 1024
-        x = self.convolution_layer_5(x)
-        x = self.batch_norm_5(x)
-        x = self.relu(x)
-
-        # global
+        # 5. Global Pool
         x = self.maxpool(x)
         x = x.reshape(batch_size, 1024)
 
