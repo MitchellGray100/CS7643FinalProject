@@ -30,7 +30,6 @@ class PointNet(nn.Module):
     def forward(self, x):
         batch_size = x.size(0)
 
-        # input transform OPTIONAL?
         transform_matrix_input = self.input_TNet(x)
         x = torch.bmm(transform_matrix_input, x).contiguous()
 
@@ -45,7 +44,6 @@ class PointNet(nn.Module):
         x = self.batch_norm_2(x)
         x = self.relu(x)
         
-        # feature transform 64 to 64 OPTIONAL?
         transform_matrix_feature = self.feature_TNet(x)
         x = torch.bmm(transform_matrix_feature, x).contiguous()
 

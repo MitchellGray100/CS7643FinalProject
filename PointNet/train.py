@@ -189,17 +189,6 @@ def train_one_epoch(
 
     pbar = tqdm(loader, desc="Training")
     for batch in pbar:
-        batch_norm_momentum = get_batch_norm_momentum(
-            step_index,
-            batch_size,
-            batch_norm_init_decay,
-            batch_norm_decay_rate,
-            batch_norm_decay_step,
-            batch_norm_decay_clip,
-        )
-        for module in model.modules():
-            if isinstance(module, nn.BatchNorm1d):
-                module.momentum = batch_norm_momentum
 
         # clear
         optimizer.zero_grad()
@@ -282,7 +271,7 @@ def train(
     learning_rate=0.001,  # 0.01, 0.001
     min_learning_rate=1e-6,
     regularization_loss_weight=0.001,
-    dropout_prob=0.3,
+    dropout_prob=0.4,
     adam_weight_decay=1e-4,  # 0, 1e-4
     augment_training_data=True,
     num_points=1024,  # sample points from 3d models
@@ -418,6 +407,18 @@ def train(
 
     for epoch in range(1, num_epochs + 1):
         print(f"\nEpoch {epoch}/{num_epochs}")
+        
+        current_momentum = get_batch_norm_momentum(
+            global_step_count,
+            batch_size,
+            batch_norm_init_decay,
+            batch_norm_decay_rate,
+            batch_norm_decay_step,
+            batch_norm_decay_clip,
+        )
+        for module in model.modules():
+            if isinstance(module, nn.BatchNorm1d):
+                module.momentum = current_momentum
 
         # train
         train_loss, train_accuracy, global_step_count = train_one_epoch(
